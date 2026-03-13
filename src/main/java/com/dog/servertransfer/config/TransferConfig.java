@@ -22,7 +22,9 @@ public class TransferConfig {
                         "Examples:",
                         "  \"lobby=hub.example.com:25565\" - Direct connection to server",
                         "  \"survival=proxy.example.com:25565|survival\" - Connect to proxy, route to 'survival' backend",
-                        "The |targetServer suffix is optional and used for Velocity proxy routing"
+                        "  \"echo=current|echo\" - Velocity-internal transfer (no reconnect, requires bungee-plugin-message-channel in velocity.toml)",
+                        "The |targetServer suffix is optional and used for Velocity proxy routing.",
+                        "Use 'current' as host for same-proxy Velocity transfers (sends BungeeCord Connect message instead of reconnecting)."
                 )
                 .defineList(
                         "entries",
