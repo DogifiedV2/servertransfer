@@ -20,7 +20,7 @@ public class ServerTransferMod {
     public ServerTransferMod() {
         NetworkHandler.register();
 
-        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, TransferConfig.SPEC);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, TransferConfig.SPEC);
 
         MinecraftForge.EVENT_BUS.register(this);
     }
