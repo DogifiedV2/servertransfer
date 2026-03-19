@@ -27,9 +27,21 @@ public class NetworkHandler {
                 TransferPacket::decode,
                 TransferPacket::handle
         );
+
+        CHANNEL.registerMessage(
+                id++,
+                ModpackHashPacket.class,
+                ModpackHashPacket::encode,
+                ModpackHashPacket::decode,
+                ModpackHashPacket::handle
+        );
     }
 
     public static void sendToPlayer(ServerPlayer player, TransferPacket packet) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
+    }
+
+    public static void sendToPlayer(ServerPlayer player, ModpackHashPacket packet) {
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
     }
 }

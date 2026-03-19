@@ -14,6 +14,8 @@ public class ClientTransferHandler {
         Minecraft minecraft = Minecraft.getInstance();
 
         minecraft.execute(() -> {
+            TransferState.setTransferring(true);
+
             ClientPacketListener oldListener = minecraft.getConnection();
             if (oldListener != null) {
                 Connection oldConnection = oldListener.getConnection();

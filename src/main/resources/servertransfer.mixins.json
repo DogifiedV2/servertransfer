@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "com.dog.servertransfer.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "servertransfer.refmap.json",
+  "client": [
+    "JeiStartEventObserverMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

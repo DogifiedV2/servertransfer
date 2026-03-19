@@ -23,6 +23,7 @@ import net.minecraft.network.protocol.handshake.ClientIntentionPacket;
 import net.minecraft.network.protocol.login.ServerboundHelloPacket;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import com.dog.servertransfer.client.TransferState;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
@@ -63,6 +64,7 @@ public class TransferScreen extends Screen {
             }
 
             if (resolved.isEmpty()) {
+                TransferState.setTransferring(false);
                 minecraft.execute(() -> minecraft.setScreen(new DisconnectedScreen(
                         new JoinMultiplayerScreen(new TitleScreen()),
                         CommonComponents.CONNECT_FAILED,
@@ -104,6 +106,7 @@ public class TransferScreen extends Screen {
                 return;
             }
 
+            TransferState.setTransferring(false);
             minecraft.execute(() -> minecraft.setScreen(new DisconnectedScreen(
                     new JoinMultiplayerScreen(new TitleScreen()),
                     CommonComponents.CONNECT_FAILED,
@@ -127,10 +130,16 @@ public class TransferScreen extends Screen {
         }
     }
 
+    private Component getTransferMessage() {
+        String displayName = !targetServer.isEmpty() ? targetServer : host;
+        return new TextComponent("You are being moved to " + displayName);
+    }
+
     @Override
     public void render(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(poseStack);
-        drawCenteredString(poseStack, this.font, this.status, this.width / 2, this.height / 2 - 50, 0xFFFFFF);
+        drawCenteredString(poseStack, this.font, getTransferMessage(), this.width / 2, this.height / 2 - 50, 0xFFFFFF);
+        drawCenteredString(poseStack, this.font, this.status, this.width / 2, this.height / 2 - 30, 0xAAAAAA);
         super.render(poseStack, mouseX, mouseY, partialTick);
     }
 
@@ -142,6 +151,7 @@ public class TransferScreen extends Screen {
     @Override
     public void onClose() {
         this.aborted = true;
+        TransferState.setTransferring(false);
         if (this.connection != null) {
             this.connection.disconnect(new TranslatableComponent("multiplayer.status.cancelled"));
         }

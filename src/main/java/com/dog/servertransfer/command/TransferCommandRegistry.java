@@ -2,6 +2,7 @@ package com.dog.servertransfer.command;
 
 import com.dog.servertransfer.ServerTransferMod;
 import com.dog.servertransfer.config.TransferConfig;
+import com.dog.servertransfer.network.ModpackHashPacket;
 import com.dog.servertransfer.network.NetworkHandler;
 import com.dog.servertransfer.network.TransferPacket;
 import com.google.common.io.ByteArrayDataOutput;
@@ -97,6 +98,9 @@ public class TransferCommandRegistry {
     }
 
     private static void transferPlayer(ServerPlayer player, String host, int port, String targetServer) {
+        String modpackHash = ModpackHashPacket.computeServerHash();
+        NetworkHandler.sendToPlayer(player, new ModpackHashPacket(modpackHash, true));
+
         if (host.equalsIgnoreCase("current")) {
             if (targetServer.isEmpty()) {
                 ServerTransferMod.LOGGER.warn("Cannot use 'current' host without a target server name (e.g. echo=current|echo)");
