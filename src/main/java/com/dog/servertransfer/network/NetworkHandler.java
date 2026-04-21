@@ -35,6 +35,14 @@ public class NetworkHandler {
                 ModpackHashPacket::decode,
                 ModpackHashPacket::handle
         );
+
+        CHANNEL.registerMessage(
+                id++,
+                DataSyncOverlayPacket.class,
+                DataSyncOverlayPacket::encode,
+                DataSyncOverlayPacket::decode,
+                DataSyncOverlayPacket::handle
+        );
     }
 
     public static void sendToPlayer(ServerPlayer player, TransferPacket packet) {
@@ -42,6 +50,10 @@ public class NetworkHandler {
     }
 
     public static void sendToPlayer(ServerPlayer player, ModpackHashPacket packet) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
+    }
+
+    public static void sendToPlayer(ServerPlayer player, DataSyncOverlayPacket packet) {
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
     }
 }

@@ -1,6 +1,7 @@
 package com.dog.servertransfer.command;
 
 import com.dog.servertransfer.ServerTransferMod;
+import com.dog.servertransfer.TransferHooks;
 import com.dog.servertransfer.config.TransferConfig;
 import com.dog.servertransfer.network.ModpackHashPacket;
 import com.dog.servertransfer.network.NetworkHandler;
@@ -98,6 +99,8 @@ public class TransferCommandRegistry {
     }
 
     private static void transferPlayer(ServerPlayer player, String host, int port, String targetServer) {
+        TransferHooks.firePreTransfer(player, host, port, targetServer);
+
         String modpackHash = ModpackHashPacket.computeServerHash();
         NetworkHandler.sendToPlayer(player, new ModpackHashPacket(modpackHash, true));
 
