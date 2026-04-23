@@ -43,6 +43,22 @@ public class NetworkHandler {
                 DataSyncOverlayPacket::decode,
                 DataSyncOverlayPacket::handle
         );
+
+        CHANNEL.registerMessage(
+                id++,
+                OpenServerMenuPacket.class,
+                OpenServerMenuPacket::encode,
+                OpenServerMenuPacket::decode,
+                OpenServerMenuPacket::handle
+        );
+
+        CHANNEL.registerMessage(
+                id++,
+                RequestTransferPacket.class,
+                RequestTransferPacket::encode,
+                RequestTransferPacket::decode,
+                RequestTransferPacket::handle
+        );
     }
 
     public static void sendToPlayer(ServerPlayer player, TransferPacket packet) {
@@ -55,5 +71,13 @@ public class NetworkHandler {
 
     public static void sendToPlayer(ServerPlayer player, DataSyncOverlayPacket packet) {
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
+    }
+
+    public static void sendToPlayer(ServerPlayer player, OpenServerMenuPacket packet) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
+    }
+
+    public static void sendToServer(RequestTransferPacket packet) {
+        CHANNEL.sendToServer(packet);
     }
 }

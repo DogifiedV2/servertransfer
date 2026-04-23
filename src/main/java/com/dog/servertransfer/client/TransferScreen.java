@@ -87,11 +87,7 @@ public class TransferScreen extends Screen {
                     this::updateStatus
             ));
 
-            String handshakeHost = serverAddress.getHost();
-            if (!targetServer.isEmpty()) {
-                handshakeHost = handshakeHost + "///" + targetServer;
-            }
-
+            String handshakeHost = !targetServer.isEmpty() ? targetServer : serverAddress.getHost();
             connection.send(new ClientIntentionPacket(
                     handshakeHost,
                     serverAddress.getPort(),

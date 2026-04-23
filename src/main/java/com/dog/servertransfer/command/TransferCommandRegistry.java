@@ -3,8 +3,10 @@ package com.dog.servertransfer.command;
 import com.dog.servertransfer.ServerTransferMod;
 import com.dog.servertransfer.TransferHooks;
 import com.dog.servertransfer.config.TransferConfig;
+import com.dog.servertransfer.menu.MenuEntry;
 import com.dog.servertransfer.network.ModpackHashPacket;
 import com.dog.servertransfer.network.NetworkHandler;
+import com.dog.servertransfer.network.OpenServerMenuPacket;
 import com.dog.servertransfer.network.TransferPacket;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
@@ -19,10 +21,13 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class TransferCommandRegistry {
+    private static final String SERVERS_MENU_COMMAND_NAME = "servers";
     private static final ResourceLocation BUNGEECORD_CHANNEL = ResourceLocation.fromNamespaceAndPath("bungeecord", "main");
     private static final Map<String, ParsedAddress> PARSED_ADDRESSES = new HashMap<>();
 
@@ -41,6 +46,8 @@ public class TransferCommandRegistry {
             registerTransferCommand(dispatcher, commandName, parsed);
             ServerTransferMod.LOGGER.info("Registered transfer command: /{} -> {}", commandName, targetAddress);
         }
+
+        registerServersMenuCommand(dispatcher);
     }
 
     private static void registerTransferCommand(
@@ -53,6 +60,47 @@ public class TransferCommandRegistry {
                         .requires(source -> source.getEntity() instanceof ServerPlayer)
                         .executes(context -> executeTransfer(context.getSource(), parsed.host, parsed.port, parsed.targetServer))
         );
+    }
+
+    private static void registerServersMenuCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(
+                Commands.literal(SERVERS_MENU_COMMAND_NAME)
+                        .requires(source -> source.getEntity() instanceof ServerPlayer)
+                        .executes(context -> executeOpenServersMenu(context.getSource()))
+        );
+        ServerTransferMod.LOGGER.info("Registered /{} command", SERVERS_MENU_COMMAND_NAME);
+    }
+
+    private static int executeOpenServersMenu(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        List<MenuEntry> validatedEntries = buildValidatedMenuEntries();
+        NetworkHandler.sendToPlayer(player, new OpenServerMenuPacket(validatedEntries));
+        return 1;
+    }
+
+    private static List<MenuEntry> buildValidatedMenuEntries() {
+        List<MenuEntry> parsedEntries = TransferConfig.getMenuEntries();
+        List<MenuEntry> validatedEntries = new ArrayList<>(parsedEntries.size());
+
+        for (MenuEntry entry : parsedEntries) {
+            if (entry.disabled()) {
+                validatedEntries.add(entry);
+                continue;
+            }
+
+            if (!PARSED_ADDRESSES.containsKey(entry.commandName())) {
+                ServerTransferMod.LOGGER.warn(
+                        "Menu entry at position {} references unknown command '{}'; skipping",
+                        entry.position(),
+                        entry.commandName()
+                );
+                continue;
+            }
+
+            validatedEntries.add(entry);
+        }
+
+        return validatedEntries;
     }
 
     private static ParsedAddress parseAddress(String address) {
@@ -86,6 +134,13 @@ public class TransferCommandRegistry {
         ServerPlayer player = source.getPlayerOrException();
         transferPlayer(player, host, port, targetServer);
         return 1;
+    }
+
+    public static boolean isKnownCommand(String commandName) {
+        if (commandName == null) {
+            return false;
+        }
+        return PARSED_ADDRESSES.containsKey(commandName.toLowerCase());
     }
 
     public static boolean transferPlayer(ServerPlayer player, String serverName) {
