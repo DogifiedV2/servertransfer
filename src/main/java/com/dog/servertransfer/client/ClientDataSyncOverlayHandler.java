@@ -18,10 +18,8 @@ public class ClientDataSyncOverlayHandler {
 
         minecraft.execute(() -> {
             if (show) {
-                if (!(minecraft.screen instanceof WaitingForDataScreen)) {
-                    LOGGER.info("Opening data-sync overlay: {}", message);
-                    minecraft.setScreen(new WaitingForDataScreen(message));
-                }
+                LOGGER.info("Transfer stage: {}", message);
+                minecraft.setScreen(new WaitingForDataScreen(message));
             } else {
                 if (minecraft.screen instanceof WaitingForDataScreen) {
                     LOGGER.info("Closing data-sync overlay");

@@ -4,3 +4,6 @@
 /build/classes/java/main/
 /.idea/
 /.claude/
+
+# Local commit message draft
+/commit-message.txt

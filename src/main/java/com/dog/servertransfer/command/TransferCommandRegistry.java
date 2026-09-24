@@ -2,6 +2,10 @@ package com.dog.servertransfer.command;
 
 import com.dog.servertransfer.ServerTransferMod;
 import com.dog.servertransfer.TransferHooks;
+import com.dog.servertransfer.TransferAPI;
+import net.minecraft.network.chat.TextComponent;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import com.dog.servertransfer.config.TransferConfig;
 import com.dog.servertransfer.menu.MenuEntry;
 import com.dog.servertransfer.network.ModpackHashPacket;
@@ -29,6 +33,8 @@ import java.util.Map;
 public class TransferCommandRegistry {
     private static final String SERVERS_MENU_COMMAND_NAME = "servers";
     private static final ResourceLocation BUNGEECORD_CHANNEL = ResourceLocation.fromNamespaceAndPath("bungeecord", "main");
+    private static final Map<UUID, PendingTransfer> PENDING = new HashMap<>();
+    private record PendingTransfer(ServerPlayer player, long deadline) {}
     private static final Map<String, ParsedAddress> PARSED_ADDRESSES = new HashMap<>();
 
     public static void registerCommands(MinecraftServer server) {
@@ -48,6 +54,10 @@ public class TransferCommandRegistry {
         }
 
         registerServersMenuCommand(dispatcher);
+        // Preserve /servers, and expose the menu under /server unless that name is configured for travel.
+        if (!PARSED_ADDRESSES.containsKey("server")) dispatcher.register(Commands.literal("server")
+                .requires(source -> source.getEntity() instanceof ServerPlayer)
+                .executes(context -> executeOpenServersMenu(context.getSource())));
     }
 
     private static void registerTransferCommand(
@@ -74,7 +84,10 @@ public class TransferCommandRegistry {
     private static int executeOpenServersMenu(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
         List<MenuEntry> validatedEntries = buildValidatedMenuEntries();
+        if (PENDING.containsKey(player.getUUID())) return 0;
+        player.closeContainer(); // Return a carried cursor stack before taking the optional menu snapshot.
         NetworkHandler.sendToPlayer(player, new OpenServerMenuPacket(validatedEntries));
+        TransferHooks.menuOpened(player);
         return 1;
     }
 
@@ -154,8 +167,47 @@ public class TransferCommandRegistry {
     }
 
     private static void transferPlayer(ServerPlayer player, String host, int port, String targetServer) {
-        TransferHooks.firePreTransfer(player, host, port, targetServer);
+        if (PENDING.containsKey(player.getUUID())) return;
+        if (host.equalsIgnoreCase("current") && targetServer.isEmpty()) {
+            player.sendMessage(new TextComponent("This server destination is not configured correctly."), player.getUUID());
+            return;
+        }
+        PendingTransfer request = new PendingTransfer(player, System.nanoTime() + TimeUnit.SECONDS.toNanos(45));
+        PENDING.put(player.getUUID(), request);
+        TransferAPI.showDataSyncOverlay(player, "Preparing your transfer");
+        TransferHooks.prepare(player, host, port, targetServer).whenComplete((receipt, failure) -> player.getServer().execute(() -> {
+            if (PENDING.get(player.getUUID()) != request || player.getServer().getPlayerList().getPlayer(player.getUUID()) != player) {
+                TransferHooks.cancelled(player);
+                return;
+            }
+            if (failure != null || receipt == null || System.nanoTime() > request.deadline()) {
+                PENDING.remove(player.getUUID(), request);
+                TransferHooks.cancelled(player);
+                Throwable cause = failure;
+                while (cause != null && cause.getCause() != null) cause = cause.getCause();
+                String message = cause instanceof IllegalStateException ? cause.getMessage() : "Your data could not be prepared safely.";
+                player.sendMessage(new TextComponent("Transfer cancelled. " + message), player.getUUID());
+                return;
+            }
+            TransferAPI.showDataSyncOverlay(player, "Connecting to " + (!targetServer.isEmpty() ? targetServer : host));
+            routePlayer(player, host, port, targetServer);
+        }));
+    }
 
+    public static void tick(MinecraftServer server) {
+        for (PendingTransfer request : List.copyOf(PENDING.values())) {
+            ServerPlayer player = request.player();
+            if (server.getPlayerList().getPlayer(player.getUUID()) != player) {
+                PENDING.remove(player.getUUID(), request);
+            } else if (System.nanoTime() > request.deadline()) {
+                PENDING.remove(player.getUUID(), request);
+                TransferHooks.cancelled(player);
+                player.sendMessage(new TextComponent("The transfer timed out. Please wait for your data to finish saving."), player.getUUID());
+            }
+        }
+    }
+
+    private static void routePlayer(ServerPlayer player, String host, int port, String targetServer) {
         String modpackHash = ModpackHashPacket.computeServerHash();
         NetworkHandler.sendToPlayer(player, new ModpackHashPacket(modpackHash, true));
 

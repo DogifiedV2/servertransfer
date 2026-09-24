@@ -10,7 +10,6 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 
 @OnlyIn(Dist.CLIENT)
 public class WaitingForDataScreen extends Screen {
-    private static final long SAFETY_TIMEOUT_MS = 30_000L;
     private static final String ANIMATION_DOTS = "...";
 
     private final String message;
@@ -23,18 +22,8 @@ public class WaitingForDataScreen extends Screen {
     }
 
     @Override
-    public void tick() {
-        if (System.currentTimeMillis() - this.openedAtMillis > SAFETY_TIMEOUT_MS) {
-            Minecraft minecraft = Minecraft.getInstance();
-            if (minecraft != null && minecraft.screen == this) {
-                minecraft.setScreen(null);
-            }
-        }
-    }
-
-    @Override
     public void render(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(poseStack);
+        this.renderDirtBackground(0);
 
         long elapsedMillis = System.currentTimeMillis() - this.openedAtMillis;
         int dotCount = (int) ((elapsedMillis / 400L) % 4L);
@@ -42,13 +31,6 @@ public class WaitingForDataScreen extends Screen {
         Component line = new TextComponent(this.message + animatedDots);
 
         drawCenteredString(poseStack, this.font, line, this.width / 2, this.height / 2 - 10, 0xFFFFFF);
-        drawCenteredString(poseStack,
-                this.font,
-                new TextComponent("Please wait while your data is synced from the other server"),
-                this.width / 2,
-                this.height / 2 + 10,
-                0xAAAAAA);
-
         super.render(poseStack, mouseX, mouseY, partialTick);
     }
 

@@ -49,6 +49,14 @@ public class ServerTransferMod {
         }
     }
 
+    @SubscribeEvent
+    public void onServerTick(net.minecraftforge.event.TickEvent.ServerTickEvent event) {
+        if (event.phase == net.minecraftforge.event.TickEvent.Phase.END) {
+            var server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+            if (server != null) TransferCommandRegistry.tick(server);
+        }
+    }
+
     public static class ClientEventHandler {
         @SubscribeEvent
         public static void onLoggedOut(ClientPlayerNetworkEvent.LoggedOutEvent event) {
