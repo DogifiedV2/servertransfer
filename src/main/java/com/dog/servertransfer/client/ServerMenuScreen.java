@@ -10,7 +10,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextComponent;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.client.gui.widget.ExtendedButton;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @OnlyIn(Dist.CLIENT)
@@ -28,6 +30,8 @@ public class ServerMenuScreen extends Screen {
     private static final Component CURRENT_SERVER_TOOLTIP = new TextComponent("You are on this server");
 
     private final List<MenuEntry> entries;
+    /** Buttons of the server the player is on; they are inactive, so the screen draws their tooltip. */
+    private final List<Button> currentServerButtons = new ArrayList<>();
 
     public ServerMenuScreen(List<MenuEntry> entries) {
         super(SCREEN_TITLE);
@@ -37,6 +41,7 @@ public class ServerMenuScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        this.currentServerButtons.clear();
 
         MenuEntry[] slots = new MenuEntry[GRID_SLOTS];
         for (MenuEntry entry : entries) {
@@ -67,16 +72,13 @@ public class ServerMenuScreen extends Screen {
         }
     }
 
+    /** Vanilla buttons only draw 20 pixels of texture; ExtendedButton stretches it to the full height. */
     private Button createSlotButton(MenuEntry entry, int x, int y) {
         Component label = new TextComponent(entry.displayName());
-        Button.OnPress onPress = button -> onSlotClicked(entry);
-        Button.OnTooltip onTooltip = entry.disabled()
-                ? (button, poseStack, mouseX, mouseY) -> renderTooltip(poseStack, CURRENT_SERVER_TOOLTIP, mouseX, mouseY)
-                : Button.NO_TOOLTIP;
-
-        Button button = new Button(x, y, BUTTON_WIDTH, BUTTON_HEIGHT, label, onPress, onTooltip);
+        Button button = new ExtendedButton(x, y, BUTTON_WIDTH, BUTTON_HEIGHT, label, pressed -> onSlotClicked(entry));
         if (entry.disabled()) {
             button.active = false;
+            this.currentServerButtons.add(button);
         }
         return button;
     }
@@ -98,6 +100,12 @@ public class ServerMenuScreen extends Screen {
         drawCenteredString(poseStack, this.font, this.title, this.width / 2, titleY, 0xFFFFFF);
 
         super.render(poseStack, mouseX, mouseY, partialTick);
+
+        for (Button button : this.currentServerButtons) {
+            if (mouseX >= button.x && mouseY >= button.y && mouseX < button.x + button.getWidth() && mouseY < button.y + button.getHeight()) {
+                renderTooltip(poseStack, CURRENT_SERVER_TOOLTIP, mouseX, mouseY);
+            }
+        }
     }
 
     @Override
