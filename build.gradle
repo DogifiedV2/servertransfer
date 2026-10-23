@@ -114,6 +114,7 @@ minecraft {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
+    maven { url "https://api.modrinth.com/maven" }
     maven {
         name = "Jared's maven"
         url = "https://maven.blamejared.com/"
@@ -134,6 +135,9 @@ dependencies {
     // If the group id is "net.minecraft" and the artifact id is one of ["client", "server", "joined"],
     // then special handling is done to allow a setup of a vanilla dependency without the use of an external repository.
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    compileOnly fg.deobf("curse.maven:waystones-245755:4943242")
+    compileOnly fg.deobf("maven.modrinth:balm:RAATKbAN")
+    compileOnly fg.deobf("maven.modrinth:betterwaystonesmenu:v8bYqqim")
 
     compileOnly fg.deobf("curse.maven:jei-238222:4351311")
 

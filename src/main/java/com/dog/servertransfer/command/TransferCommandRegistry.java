@@ -34,7 +34,7 @@ public class TransferCommandRegistry {
     private static final String SERVERS_MENU_COMMAND_NAME = "servers";
     private static final ResourceLocation BUNGEECORD_CHANNEL = ResourceLocation.fromNamespaceAndPath("bungeecord", "main");
     private static final Map<UUID, PendingTransfer> PENDING = new HashMap<>();
-    private record PendingTransfer(ServerPlayer player, long deadline) {}
+    private record PendingTransfer(ServerPlayer player, long deadline, java.util.concurrent.CompletableFuture<Boolean> result) {}
     private static final Map<String, ParsedAddress> PARSED_ADDRESSES = new HashMap<>();
 
     public static void registerCommands(MinecraftServer server) {
@@ -68,7 +68,7 @@ public class TransferCommandRegistry {
         dispatcher.register(
                 Commands.literal(name)
                         .requires(source -> source.getEntity() instanceof ServerPlayer)
-                        .executes(context -> executeTransfer(context.getSource(), parsed.host, parsed.port, parsed.targetServer))
+                        .executes(context -> executeTransfer(context.getSource(), name, parsed))
         );
     }
 
@@ -143,9 +143,9 @@ public class TransferCommandRegistry {
         return new ParsedAddress(host, port, targetServer);
     }
 
-    private static int executeTransfer(CommandSourceStack source, String host, int port, String targetServer) throws CommandSyntaxException {
+    private static int executeTransfer(CommandSourceStack source, String name, ParsedAddress parsed) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
-        transferPlayer(player, host, port, targetServer);
+        transferPlayer(player, parsed.host, parsed.port, parsed.targetServer, displayName(name));
         return 1;
     }
 
@@ -162,22 +162,38 @@ public class TransferCommandRegistry {
             ServerTransferMod.LOGGER.warn("No transfer entry configured for server '{}'", serverName);
             return false;
         }
-        transferPlayer(player, parsed.host, parsed.port, parsed.targetServer);
+        transferPlayer(player, parsed.host, parsed.port, parsed.targetServer, displayName(serverName));
         return true;
     }
 
-    private static void transferPlayer(ServerPlayer player, String host, int port, String targetServer) {
-        if (PENDING.containsKey(player.getUUID())) return;
+    public static java.util.concurrent.CompletionStage<Boolean> transferAsync(ServerPlayer player, String name) {
+        if (!player.getServer().isSameThread()) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Transfer must start on the server thread."));
+        ParsedAddress parsed = PARSED_ADDRESSES.get(name.toLowerCase(java.util.Locale.ROOT));
+        if (parsed == null) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("No route for " + name));
+        return transferPlayer(player, parsed.host, parsed.port, parsed.targetServer, displayName(name));
+    }
+
+    /** A display label is never used as the proxy handshake or connection address. */
+    public static String displayName(String routeName) {
+        for (MenuEntry entry : TransferConfig.getMenuEntries()) {
+            if (!entry.disabled() && entry.commandName().equalsIgnoreCase(routeName)) return entry.displayName();
+        }
+        return routeName;
+    }
+
+    private static java.util.concurrent.CompletionStage<Boolean> transferPlayer(ServerPlayer player, String host, int port, String targetServer, String displayName) {
+        if (PENDING.containsKey(player.getUUID())) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("A transfer is already pending."));
         if (host.equalsIgnoreCase("current") && targetServer.isEmpty()) {
             player.sendMessage(new TextComponent("This server destination is not configured correctly."), player.getUUID());
-            return;
+            return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Destination is not configured."));
         }
-        PendingTransfer request = new PendingTransfer(player, System.nanoTime() + TimeUnit.SECONDS.toNanos(45));
+        PendingTransfer request = new PendingTransfer(player, System.nanoTime() + TimeUnit.SECONDS.toNanos(45), new java.util.concurrent.CompletableFuture<>());
         PENDING.put(player.getUUID(), request);
         TransferAPI.showDataSyncOverlay(player, "Preparing your transfer");
         TransferHooks.prepare(player, host, port, targetServer).whenComplete((receipt, failure) -> player.getServer().execute(() -> {
             if (PENDING.get(player.getUUID()) != request || player.getServer().getPlayerList().getPlayer(player.getUUID()) != player) {
                 TransferHooks.cancelled(player);
+                request.result().completeExceptionally(new IllegalStateException("Transfer interrupted."));
                 return;
             }
             if (failure != null || receipt == null || System.nanoTime() > request.deadline()) {
@@ -186,12 +202,15 @@ public class TransferCommandRegistry {
                 Throwable cause = failure;
                 while (cause != null && cause.getCause() != null) cause = cause.getCause();
                 String message = cause instanceof IllegalStateException ? cause.getMessage() : "Your data could not be prepared safely.";
+                request.result().completeExceptionally(new IllegalStateException(message));
                 player.sendMessage(new TextComponent("Transfer cancelled. " + message), player.getUUID());
                 return;
             }
-            TransferAPI.showDataSyncOverlay(player, "Connecting to " + (!targetServer.isEmpty() ? targetServer : host));
-            routePlayer(player, host, port, targetServer);
+            TransferAPI.showDataSyncOverlay(player, "Connecting to " + displayName);
+            try { routePlayer(player, host, port, targetServer, displayName); request.result().complete(true); }
+            catch (Exception e) { PENDING.remove(player.getUUID(), request); TransferHooks.cancelled(player); request.result().completeExceptionally(e); }
         }));
+        return request.result();
     }
 
     public static void tick(MinecraftServer server) {
@@ -199,15 +218,17 @@ public class TransferCommandRegistry {
             ServerPlayer player = request.player();
             if (server.getPlayerList().getPlayer(player.getUUID()) != player) {
                 PENDING.remove(player.getUUID(), request);
+                request.result().completeExceptionally(new IllegalStateException("Player disconnected."));
             } else if (System.nanoTime() > request.deadline()) {
                 PENDING.remove(player.getUUID(), request);
                 TransferHooks.cancelled(player);
+                request.result().completeExceptionally(new IllegalStateException("Transfer timed out."));
                 player.sendMessage(new TextComponent("The transfer timed out. Please wait for your data to finish saving."), player.getUUID());
             }
         }
     }
 
-    private static void routePlayer(ServerPlayer player, String host, int port, String targetServer) {
+    private static void routePlayer(ServerPlayer player, String host, int port, String targetServer, String displayName) {
         String modpackHash = ModpackHashPacket.computeServerHash();
         NetworkHandler.sendToPlayer(player, new ModpackHashPacket(modpackHash, true));
 
@@ -219,7 +240,7 @@ public class TransferCommandRegistry {
             sendVelocityTransfer(player, targetServer);
             ServerTransferMod.LOGGER.info("Velocity-transferring player {} to server '{}'", player.getName().getString(), targetServer);
         } else {
-            NetworkHandler.sendToPlayer(player, new TransferPacket(host, port, targetServer));
+            NetworkHandler.sendToPlayer(player, new TransferPacket(host, port, targetServer, displayName));
             if (targetServer.isEmpty()) {
                 ServerTransferMod.LOGGER.info("Transferring player {} to {}:{}", player.getName().getString(), host, port);
             } else {

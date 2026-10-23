@@ -35,15 +35,21 @@ public class TransferScreen extends Screen {
     private final String host;
     private final int port;
     private final String targetServer;
+    private final String displayName;
     private volatile Connection connection;
     private volatile boolean aborted = false;
     private volatile Component status = new TranslatableComponent("connect.connecting");
 
     public TransferScreen(String host, int port, String targetServer) {
+        this(host, port, targetServer, targetServer != null && !targetServer.isBlank() ? targetServer : host);
+    }
+
+    public TransferScreen(String host, int port, String targetServer, String displayName) {
         super(new TextComponent("Transferring..."));
         this.host = host;
         this.port = port;
         this.targetServer = targetServer != null ? targetServer : "";
+        this.displayName = displayName != null && !displayName.isBlank() ? displayName : host;
     }
 
     public void connect(Minecraft minecraft) {
@@ -127,7 +133,6 @@ public class TransferScreen extends Screen {
     }
 
     private Component getTransferMessage() {
-        String displayName = !targetServer.isEmpty() ? targetServer : host;
         return new TextComponent("You are being moved to " + displayName);
     }
 

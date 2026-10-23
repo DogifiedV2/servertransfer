@@ -11,6 +11,10 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 public class ClientTransferHandler {
 
     public static void handleTransfer(String host, int port, String targetServer) {
+        handleTransfer(host, port, targetServer, targetServer != null && !targetServer.isBlank() ? targetServer : host);
+    }
+
+    public static void handleTransfer(String host, int port, String targetServer, String displayName) {
         Minecraft minecraft = Minecraft.getInstance();
 
         minecraft.execute(() -> {
@@ -24,7 +28,7 @@ public class ClientTransferHandler {
                 }
             }
 
-            TransferScreen screen = new TransferScreen(host, port, targetServer);
+            TransferScreen screen = new TransferScreen(host, port, targetServer, displayName);
             minecraft.clearLevel(screen);
             minecraft.prepareForMultiplayer();
             screen.connect(minecraft);
